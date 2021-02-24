@@ -315,7 +315,6 @@ class Gem::Installer
     end
 
     generate_bin
-    generate_plugins
 
     unless @options[:install_as_default]
       write_spec
@@ -326,7 +325,13 @@ class Gem::Installer
 
     say spec.post_install_message if options[:post_install_message] && !spec.post_install_message.nil?
 
-    Gem::Installer.install_lock.synchronize { Gem::Specification.reset }
+    latest = Gem::Installer.install_lock.synchronize do
+      latest_spec = Gem::Specification.latest_spec_for(spec.name)
+      Gem::Specification.reset
+      latest_spec
+    end
+
+    generate_plugins unless latest && latest.version > spec.version
 
     run_post_install_hooks
 
@@ -508,9 +513,6 @@ class Gem::Installer
   end
 
   def generate_plugins # :nodoc:
-    latest = Gem::Installer.install_lock.synchronize { Gem::Specification.latest_spec_for(spec.name) }
-    return if latest && latest.version > spec.version
-
     ensure_writable_dir @plugins_dir
 
     if spec.plugins.empty?
