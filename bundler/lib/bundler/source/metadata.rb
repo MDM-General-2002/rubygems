@@ -33,6 +33,10 @@ module Bundler
         end
       end
 
+      def cached!; end
+
+      def remote!; end
+
       def options
         {}
       end

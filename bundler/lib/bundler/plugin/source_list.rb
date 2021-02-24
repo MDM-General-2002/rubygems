@@ -17,10 +17,6 @@ module Bundler
         path_sources + git_sources + rubygems_sources + [metadata_source]
       end
 
-      def default_source
-        git_sources.first || global_rubygems_source
-      end
-
       private
 
       def rubygems_aggregate_class

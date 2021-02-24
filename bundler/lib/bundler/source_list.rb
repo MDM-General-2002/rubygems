@@ -5,41 +5,24 @@ module Bundler
     attr_reader :path_sources,
       :git_sources,
       :plugin_sources,
-      :global_path_source,
+      :global_rubygems_source,
       :metadata_source
-
-    def global_rubygems_source
-      @global_rubygems_source ||= rubygems_aggregate_class.new("allow_local" => true)
-    end
 
     def initialize
       @path_sources           = []
       @git_sources            = []
       @plugin_sources         = []
       @global_rubygems_source = nil
-      @global_path_source     = nil
+      @rubygems_aggregate     = rubygems_aggregate_class.new
       @rubygems_sources       = []
       @metadata_source        = Source::Metadata.new
-
-      @separate_gem_lockfile_sections = true
-    end
-
-    def separate_gem_lockfile_sections?
-      @separate_gem_lockfile_sections
-    end
-
-    def separate_gem_lockfile_sections!
-      rubygems_sources.map(&:separate_lockfile_sections!)
-      @separate_gem_lockfile_sections = false
     end
 
     def add_path_source(options = {})
       if options["gemspec"]
         add_source_to_list Source::Gemspec.new(options), path_sources
       else
-        path_source = add_source_to_list Source::Path.new(options), path_sources
-        @global_path_source ||= path_source if options["global"]
-        path_source
+        add_source_to_list Source::Path.new(options), path_sources
       end
     end
 
@@ -58,20 +41,24 @@ module Bundler
     end
 
     def global_rubygems_source=(uri)
-      @global_rubygems_source ||= rubygems_aggregate_class.new("remotes" => uri, "allow_local" => true)
+      if Bundler.feature_flag.disable_multisource?
+        @global_rubygems_source ||= rubygems_aggregate_class.new("remotes" => uri)
+      end
+      add_rubygems_remote(uri)
     end
 
     def add_rubygems_remote(uri)
-      global_rubygems_source.add_remote(uri)
-      global_rubygems_source
+      return if Bundler.feature_flag.disable_multisource?
+      @rubygems_aggregate.add_remote(uri)
+      @rubygems_aggregate
     end
 
     def default_source
-      global_path_source || global_rubygems_source
+      global_rubygems_source || @rubygems_aggregate
     end
 
     def rubygems_sources
-      @rubygems_sources + [global_rubygems_source]
+      @rubygems_sources + [default_source]
     end
 
     def rubygems_remotes
@@ -88,7 +75,7 @@ module Bundler
 
     def lock_sources
       lock_sources = (path_sources + git_sources + plugin_sources).sort_by(&:to_s)
-      if separate_gem_lockfile_sections?
+      if Bundler.feature_flag.disable_multisource?
         lock_sources + rubygems_sources.sort_by(&:to_s)
       else
         lock_sources << combine_rubygems_sources
@@ -105,11 +92,12 @@ module Bundler
         end
       end
 
-      replacement_rubygems = !separate_gem_lockfile_sections? &&
+      replacement_rubygems = !Bundler.feature_flag.disable_multisource? &&
         replacement_sources.detect {|s| s.is_a?(Source::Rubygems) }
-      @global_rubygems_source = replacement_rubygems if replacement_rubygems
+      @rubygems_aggregate = replacement_rubygems if replacement_rubygems
 
       return true if !equal_sources?(lock_sources, replacement_sources) && !equivalent_sources?(lock_sources, replacement_sources)
+      return true if replacement_rubygems && rubygems_remotes.sort_by(&:to_s) != replacement_rubygems.remotes.sort_by(&:to_s)
 
       false
     end
@@ -120,6 +108,10 @@ module Bundler
 
     def remote!
       all_sources.each(&:remote!)
+    end
+
+    def rubygems_primary_remotes
+      @rubygems_aggregate.remotes
     end
 
     private
@@ -144,9 +136,7 @@ module Bundler
     end
 
     def combine_rubygems_sources
-      aggregate_source = Source::Rubygems.new("remotes" => rubygems_remotes)
-      aggregate_source.separate_lockfile_sections! unless separate_gem_lockfile_sections?
-      aggregate_source
+      Source::Rubygems.new("remotes" => rubygems_remotes)
     end
 
     def warn_on_git_protocol(source)
