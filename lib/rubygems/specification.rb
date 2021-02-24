@@ -1108,11 +1108,11 @@ class Gem::Specification < Gem::BasicSpecification
   def self.load(file)
     return unless file
 
-    _spec = LOAD_CACHE_MUTEX.synchronize { LOAD_CACHE[file] }
-    return _spec if _spec
-
     file = file.dup.tap(&Gem::UNTAINT)
     return unless File.file?(file)
+
+    _spec = LOAD_CACHE_MUTEX.synchronize { LOAD_CACHE[file] }
+    return _spec if _spec
 
     code = File.read file, :mode => 'r:UTF-8:-'
 
@@ -1231,7 +1231,6 @@ class Gem::Specification < Gem::BasicSpecification
     @@stubs_by_name = {}
     @@spec_with_requirable_file = {}
     @@active_stub_with_requirable_file = {}
-    _clear_load_cache
     unresolved = unresolved_deps
     unless unresolved.empty?
       w = "W" + "ARN"
