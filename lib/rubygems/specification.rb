@@ -1087,7 +1087,7 @@ class Gem::Specification < Gem::BasicSpecification
   # Return the latest installed spec for gem +name+.
 
   def self.latest_spec_for(name)
-    latest_specs(true).find {|installed_spec| installed_spec.name == name }
+    Gem::Specification.stubs_for(name).first
   end
 
   def self._latest_specs(specs, prerelease = false) # :nodoc:
