@@ -11,6 +11,30 @@ require "rubygems/source"
 require_relative "match_platform"
 
 module Gem
+  class << self
+    unless Gem.rubygems_version > Gem::Version.new("3.2.11")
+      remove_method :write_binary if instance_methods(false).include?(:write_binary)
+
+      def write_binary(path, data)
+        open(path, File::RDWR | File::CREAT | File::BINARY | File::LOCK_EX) do |io|
+          io.write data
+        end
+      rescue *WRITE_BINARY_ERRORS
+        open(path, "wb") do |io|
+          io.write data
+        end
+      rescue Errno::ENOLCK # NFS
+        if Thread.main != Thread.current
+          raise
+        else
+          open(path, "wb") do |io|
+            io.write data
+          end
+        end
+      end
+    end
+  end
+
   class Specification
     attr_accessor :remote, :location, :relative_loaded_from
 

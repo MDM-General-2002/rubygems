@@ -8,6 +8,14 @@ module Bundler
       # Bundler needs to install gems regardless of binstub overwriting
     end
 
+    unless Gem.rubygems_version > Gem::Version.new("3.2.11")
+      def write_spec
+        spec.installed_by_version = Gem.rubygems_version
+
+        Gem.write_binary(spec_file, spec.to_ruby_for_cache)
+      end
+    end
+
     def pre_install_checks
       super && validate_bundler_checksum(options[:bundler_expected_checksum])
     end
