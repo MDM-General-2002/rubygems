@@ -16,20 +16,14 @@ module Gem
       remove_method :write_binary if instance_methods(false).include?(:write_binary)
 
       def write_binary(path, data)
-        open(path, File::RDWR | File::CREAT | File::BINARY | File::LOCK_EX) do |io|
-          io.write data
-        end
+        IO.write(path, data, :mode => File::RDWR | File::CREAT | File::BINARY | File::LOCK_EX)
       rescue *WRITE_BINARY_ERRORS
-        open(path, "wb") do |io|
-          io.write data
-        end
+        IO.write(path, data, :mode => "wb")
       rescue Errno::ENOLCK # NFS
         if Thread.main != Thread.current
           raise
         else
-          open(path, "wb") do |io|
-            io.write data
-          end
+          IO.write(path, data, :mode => "wb")
         end
       end
     end
